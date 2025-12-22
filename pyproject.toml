@@ -1,12 +1,12 @@
 [project]
 name = "prettylogging"
 version = "0.1.0"
-description = ""
+description = "A pretty logging library for Python"
 authors = [
-    {name = "AlessandroLovo",email = "alessandro.lovo@mitigasolutions.com"}
+    {name = "AlessandroLovo",email = "alessandro.lovo.w@gmail.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.9"
 dependencies = [
 ]
 

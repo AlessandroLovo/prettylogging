@@ -7,12 +7,14 @@ import os
 import traceback
 from pathlib import Path
 
+from lark import logger
+
 if __name__ == '__main__':
     module_logger = logging.getLogger()
-    module_logger.handlers = [logging.StreamHandler(sys.stdout)]
 else:
     module_logger = logging.getLogger(__name__)
 module_logger.level = logging.INFO
+module_logger.handlers = [logging.StreamHandler(sys.stdout)]
 
 MAX_FILENAME_LENGTH = 128
 default_formatter = logging.Formatter('%(asctime)s %(message)s', datefmt='%m/%d/%Y %H:%M:%S')
@@ -48,6 +50,50 @@ def pretty_time(t:float) -> str:
         pt += f'{m:.0f} min '
     pt += f'{s:.1f} s'
     return pt
+
+
+### path utils ###
+def safe_path(path:str) -> str:
+    '''
+    Replaces square brackets with round ones and removes spaces and ' characters.
+    This way the path can be used safely to create files.
+    If the filename is longer than MAX_FILENAME_LENGTH characters, it is clipped and a warning is logged.
+
+    Parameters
+    ----------
+    path : str
+        path to be modified
+
+    Returns
+    -------
+    str
+        modified path
+
+    Examples
+    --------
+    >>> safe_path("tau 5.log")
+    'tau5.log'
+    >>> safe_path("label_field__'t2m'--tau__[0, 1, 2]")
+    'label_field__t2m--tau__(0,1,2).log'
+    '''
+    path = path.replace(' ', '')
+    path = path.replace('[', '(')
+    path = path.replace(']', ')')
+    path = path.replace("'", '')
+
+    path_to = None
+    if '/' in path:
+        path_to, path = path.rsplit('/', 1)
+
+    if len(path) > MAX_FILENAME_LENGTH:
+        clipped_path = path[:MAX_FILENAME_LENGTH - 3] + '...'
+        module_logger.warning(f'Too long filename\n\t{path}\nClipping to\n\t{clipped_path}')
+        path = clipped_path
+    if path_to is not None:
+        path = f'{path_to}/{path}'
+
+    return path
+
 
 ###### function decorators for logging ###
 
@@ -261,7 +307,11 @@ def new_telegram_handler(chat_ID=None, token=None, level=logging.WARNING, format
     try:
         import telegram_handler # NOTE: to install this package run pip install python-telegram-handler
     except ImportError:
-        module_logger.error('To be able to log to telegram, you need the package telegram_handler. You can install it with `pip install python-telegram-handler`')
+        module_logger.error(
+            "To be able to log to telegram, you need the optional extra 'telegram'. "
+            "Install with: pip install 'prettylogging[telegram]' or "
+            "poetry add prettylogging -E telegram"
+            )
         return
     if chat_ID is None or token is None:
         return

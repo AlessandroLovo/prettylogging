@@ -1,15 +1,14 @@
 import logging
+import os
+import sys
+import time
+import traceback
+import typing
 from datetime import datetime
 from functools import wraps
-import time
-import sys
-import os
-import traceback
 from pathlib import Path
 
-from lark import logger
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     module_logger = logging.getLogger()
 else:
     module_logger = logging.getLogger(__name__)
@@ -17,19 +16,22 @@ module_logger.level = logging.INFO
 module_logger.handlers = [logging.StreamHandler(sys.stdout)]
 
 MAX_FILENAME_LENGTH = 128
-default_formatter = logging.Formatter('%(asctime)s %(message)s', datefmt='%m/%d/%Y %H:%M:%S')
-indentation_sep = '\t' # spacing amount at each indentation
+default_formatter = logging.Formatter(
+    "%(asctime)s %(message)s", datefmt="%m/%d/%Y %H:%M:%S"
+)
+indentation_sep = "\t"  # spacing amount at each indentation
 
 
 ### time ###
-def now():
-    '''
+def now() -> str:
+    """
     Returns the current time as string formatted as year-month-day hour:minute:second
-    '''
-    return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    """
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-def pretty_time(t:float) -> str:
-    '''
+
+def pretty_time(t: float) -> str:
+    """
     Takes a time in seconds and returns it in a string with the format <hours> h <minutes> min <seconds> s
 
     Examples
@@ -38,23 +40,23 @@ def pretty_time(t:float) -> str:
     '2 min 4.0 s'
     >>> pretty_time(3601.4)
     '1 h 1.4 s'
-    '''
-    h = t//3600
-    t = t - h*3600
-    m = t//60
-    s = t - m*60
-    pt = ''
+    """
+    h = t // 3600
+    t = t - h * 3600
+    m = t // 60
+    s = t - m * 60
+    pt = ""
     if h > 0:
-        pt += f'{h:.0f} h '
+        pt += f"{h:.0f} h "
     if m > 0:
-        pt += f'{m:.0f} min '
-    pt += f'{s:.1f} s'
+        pt += f"{m:.0f} min "
+    pt += f"{s:.1f} s"
     return pt
 
 
 ### path utils ###
-def safe_path(path:str) -> str:
-    '''
+def safe_path(path: str) -> str:
+    """
     Replaces square brackets with round ones and removes spaces and ' characters.
     This way the path can be used safely to create files.
     If the filename is longer than MAX_FILENAME_LENGTH characters, it is clipped and a warning is logged.
@@ -75,38 +77,42 @@ def safe_path(path:str) -> str:
     'tau5.log'
     >>> safe_path("label_field__'t2m'--tau__[0, 1, 2]")
     'label_field__t2m--tau__(0,1,2).log'
-    '''
-    path = path.replace(' ', '')
-    path = path.replace('[', '(')
-    path = path.replace(']', ')')
-    path = path.replace("'", '')
+    """
+    path = path.replace(" ", "")
+    path = path.replace("[", "(")
+    path = path.replace("]", ")")
+    path = path.replace("'", "")
 
     path_to = None
-    if '/' in path:
-        path_to, path = path.rsplit('/', 1)
+    if "/" in path:
+        path_to, path = path.rsplit("/", 1)
 
     if len(path) > MAX_FILENAME_LENGTH:
-        clipped_path = path[:MAX_FILENAME_LENGTH - 3] + '...'
-        module_logger.warning(f'Too long filename\n\t{path}\nClipping to\n\t{clipped_path}')
+        clipped_path = path[: MAX_FILENAME_LENGTH - 3] + "..."
+        module_logger.warning(
+            f"Too long filename\n\t{path}\nClipping to\n\t{clipped_path}"
+        )
         path = clipped_path
     if path_to is not None:
-        path = f'{path_to}/{path}'
+        path = f"{path_to}/{path}"
 
     return path
 
 
 ###### function decorators for logging ###
 
+
 ## indenting ####
-def get_logger(logger):
+def get_logger(logger: None | str | logging.Logger = None) -> logging.Logger:
     if logger is None:
         logger = logging.getLogger()
     if isinstance(logger, str):
         logger = logging.getLogger(logger)
     return logger
 
-def indent_write(write):
-    '''
+
+def indent_write(write: typing.Callable) -> typing.Callable:
+    """
     decorator for a function that writes to a stream, e.g. sys.stdout or a file. Indents the message.
 
     Examples
@@ -123,15 +129,22 @@ def indent_write(write):
     before
         Hello!
     after
-    '''
+    """
+
     @wraps(write)
-    def wrapper(message):
-        message = (indentation_sep+f'\n{indentation_sep}'.join(message[:-1].split('\n')) + message[-1])
+    def wrapper(message: str) -> int:
+        message = (
+            indentation_sep
+            + f"\n{indentation_sep}".join(message[:-1].split("\n"))
+            + message[-1]
+        )
         return write(message)
+
     return wrapper
 
-def indent(*streams):
-    '''
+
+def indent(*streams: typing.Any) -> typing.Callable:
+    """
     Returns a decorator that indents the output produced by the decorated function on the streams provided
 
     Examples
@@ -169,43 +182,50 @@ def indent(*streams):
     after outer
 
     You can also indent a handler `h` of the logging module by creating a decorator @indent(h.stream)
-    '''
-    def wrapper_outer(func):
+    """
+
+    def wrapper_outer(func: typing.Callable) -> typing.Callable:
         @wraps(func)
-        def wrapper_inner(*args, **kwargs):
+        def wrapper_inner(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
             # save old write and emit functions
-            old_write = [stream.write if hasattr(stream, 'write') else None for stream in streams]
+            old_write = [
+                stream.write if hasattr(stream, "write") else None for stream in streams
+            ]
             # indent write and emit functions
-            for i,stream in enumerate(streams):
+            for i, stream in enumerate(streams):
                 if old_write[i] is not None:
                     stream.write = indent_write(stream.write)
             try:
                 r = func(*args, **kwargs)
             finally:
                 # restore original functions
-                for i,stream in enumerate(streams):
+                for i, stream in enumerate(streams):
                     if old_write[i] is not None:
                         stream.write = old_write[i]
             return r
+
         return wrapper_inner
+
     return wrapper_outer
 
-def indent_logger(logger=None):
-    '''
+
+def indent_logger(logger: None | str | logging.Logger = None) -> typing.Callable:
+    """
     Indents all handlers of a given logger when the decorated function is running
 
     Parameters
     ----------
     logger : logging.loggers.Logger, optional
         logger, if None the root logger is used. The default is None
-    '''
+    """
     logger = get_logger(logger)
-    def wrapper_outer(func):
+
+    def wrapper_outer(func: typing.Callable) -> typing.Callable:
         @wraps(func)
-        def wrapper_inner(*args, **kwargs):
+        def wrapper_inner(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
             streams = []
             # get the handlers of the logger and its parents
-            c = logger
+            c: logging.Logger | None = logger
             while c:
                 # # avoid indenting the same stream more than once
                 # # in case both a logger and one of its parent log to the same stream, which would be silly anyways
@@ -215,38 +235,41 @@ def indent_logger(logger=None):
                 #         streams.append(s)
 
                 # assuming the loggers are not silly and so no stream is repeated
-                streams += [h.stream for h in c.handlers if hasattr(h, 'stream')]
-                if not c.propagate:
-                    c = None    #break out
-                else:
-                    c = c.parent
+                streams += [h.stream for h in c.handlers if hasattr(h, "stream")]
+                c = c.parent if c.propagate else None
 
             # save old write functions
-            old_write = [stream.write if hasattr(stream, 'write') else None for stream in streams]
+            old_write = [
+                stream.write if hasattr(stream, "write") else None for stream in streams
+            ]
             # indent write functions
-            for i,stream in enumerate(streams):
+            for i, stream in enumerate(streams):
                 if old_write[i] is not None:
                     stream.write = indent_write(stream.write)
             try:
                 r = func(*args, **kwargs)
             finally:
                 # restore original functions
-                for i,stream in enumerate(streams):
+                for i, stream in enumerate(streams):
                     if old_write[i] is not None:
                         stream.write = old_write[i]
             return r
+
         return wrapper_inner
+
     return wrapper_outer
 
-def indent_stdout(func):
-    '''
+
+def indent_stdout(func: typing.Callable) -> typing.Callable:
+    """
     Indents the stdout output produced by a function
-    '''
+    """
     return indent(sys.stdout)(func)
 
+
 ## execution time
-def exec_time(logger=None):
-    '''
+def exec_time(logger: None | str | logging.Logger = None) -> typing.Callable:
+    """
     Prints the execution time of a function
 
     Examples
@@ -260,23 +283,36 @@ def exec_time(logger=None):
     test:
     Hi
     test: completed in 1.0 s
-    '''
+    """
     logger = get_logger(logger)
-    def wrapper_outer(func):
+
+    def wrapper_outer(func: typing.Callable) -> typing.Callable:
         @wraps(func)
-        def wrapper_inner(*args, **kwargs):
+        def wrapper_inner(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
             start_time = time.time()
-            logger.info(f'{func.__name__}:')
+            logger.info(f"{func.__name__}:")
             r = func(*args, **kwargs)
-            logger.info(f'{func.__name__}: completed in {pretty_time(time.time() - start_time)}')
+            logger.info(
+                f"{func.__name__}: completed in {pretty_time(time.time() - start_time)}"
+            )
             return r
+
         return wrapper_inner
+
     return wrapper_outer
+
 
 #### TELEGRAM LOGGER ####
 
-def new_telegram_handler(chat_ID=None, token=None, level=logging.WARNING, formatter=default_formatter, **kwargs):
-    '''
+
+def new_telegram_handler(
+    chat_ID: int | str | None = None,
+    token: str | None = None,
+    level: int = logging.WARNING,
+    formatter: logging.Formatter | str | None = default_formatter,
+    **kwargs: typing.Any,
+) -> typing.Any:
+    """
     Creates a telegram handler object.
 
     To log to telegram you need to use a telegram Bot. You can create one by typing the command /newbot in the chat with the BotFather. When you finalize your bot, the BotFather will give you the authorization token.
@@ -303,40 +339,42 @@ def new_telegram_handler(chat_ID=None, token=None, level=logging.WARNING, format
     -------
     th: telegram_handler.handlers.TelegramHandler
         handler that logs to telegram
-    '''
+    """
     try:
-        import telegram_handler # NOTE: to install this package run pip install python-telegram-handler
+        import telegram_handler  # NOTE: to install this package run pip install python-telegram-handler
     except ImportError:
         module_logger.error(
             "To be able to log to telegram, you need the optional extra 'telegram'. "
             "Install with: pip install 'prettylogging[telegram]' or "
             "poetry add prettylogging -E telegram"
-            )
+        )
         return
     if chat_ID is None or token is None:
         return
 
     try:
         chat_ID = int(chat_ID)
-    except: # `chat_ID is either string or path`
-        if isinstance(chat_ID, str) and chat_ID.startswith('~'):
+    except ValueError:  # `chat_ID is either string or path`
+        if isinstance(chat_ID, str) and chat_ID.startswith("~"):
             chat_ID = f"{os.environ['HOME']}{chat_ID[1:]}"
-        with open(chat_ID, 'r') as chat_ID_file:
-            chat_ID = int(chat_ID_file.readline().rstrip('\n'))
-    if not chat_ID: # chat ID 0 disables the logger
+        with open(chat_ID) as chat_ID_file:
+            chat_ID = int(chat_ID_file.readline().rstrip("\n"))
+    if not chat_ID:  # chat ID 0 disables the logger
         return
 
     try:
-        if token.startswith('~'):
+        if token.startswith("~"):
             token = f"{os.environ['HOME']}{token[1:]}"
-        with open(token, 'r') as token_file:
-            token = token_file.readline().rstrip('\n')
+        with open(token) as token_file:
+            token = token_file.readline().rstrip("\n")
     except FileNotFoundError:
-        pass # we assume that `token` is the actual token, not the path to it
+        pass  # we assume that `token` is the actual token, not the path to it
 
-    th = telegram_handler.handlers.TelegramHandler(token=token, chat_id=chat_ID, **kwargs)
+    th = telegram_handler.handlers.TelegramHandler(
+        token=token, chat_id=chat_ID, **kwargs
+    )
     if isinstance(formatter, str):
-        if formatter == 'default':
+        if formatter == "default":
             formatter = default_formatter
         else:
             formatter = logging.Formatter(formatter)
@@ -346,43 +384,57 @@ def new_telegram_handler(chat_ID=None, token=None, level=logging.WARNING, format
     return th
 
 
-
-
 #### LOGGERS AS CONTEXT MANAGERS ####
 
-class CMLogger():
-    def __init__(self, logger: logging.Logger, level=logging.INFO):
+
+class CMLogger:
+    def __init__(self, logger: logging.Logger, level: int = logging.INFO) -> None:
         self.logger = logger
         self.level = int(level)
 
-        self.handler = None
+        self.handler: logging.Handler | None = None
 
-    def create_new_handler(self):
-        raise NotImplementedError('This is the base class you fool!')
+    def create_new_handler(self) -> None:
+        raise NotImplementedError("This is the base class you fool!")
 
-    def __enter__(self):
+    def __enter__(self) -> "CMLogger":
         try:
             self.create_new_handler()
-        except:
-            self.logger.error(f'Failed to create new handler for {self.__class__.__name__} due to \n\n{traceback.format_exc()}')
+        except Exception as e:
+            self.logger.error(
+                f"Failed to create new handler for {self.__class__.__name__} due to \n\n{traceback.format_exc()}"
+            )
+            raise e
 
         if self.handler is not None:
             self.logger.handlers.append(self.handler)
-            self.logger.debug(f'Added {self.__class__.__name__}')
+            self.logger.debug(f"Added {self.__class__.__name__}")
 
         return self
 
-    def __exit__(self, exc_type, exc_value, exc_traceback):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        exc_traceback: typing.Any | None,
+    ) -> None:
         if self.handler is not None:
             if exc_type is not None:
                 self.logger.error(traceback.format_exc())
             self.logger.handlers.remove(self.handler)
-            self.logger.debug(f'Removed {self.__class__.__name__}')
+            self.logger.debug(f"Removed {self.__class__.__name__}")
 
 
 class TelegramLogger(CMLogger):
-    def __init__(self, logger: logging.Logger, chat_ID: int=None, token: str=None, level=logging.INFO, **kwargs):
-        '''
+    def __init__(
+        self,
+        logger: logging.Logger,
+        chat_ID: int | None = None,
+        token: str | None = None,
+        level: int = logging.INFO,
+        **kwargs: typing.Any,
+    ):
+        """
         Telegram logger to be used with a `with` statement. If an unhandled exception is raised in the with block, the traceback will also be logged to telegram with level logging.ERROR
 
         To log to telegram you need to use a telegram Bot. You can create one by typing the command /newbot in the chat with the BotFather. When you finalize your bot, the BotFather will give you the authorization token.
@@ -413,18 +465,27 @@ class TelegramLogger(CMLogger):
         >>> logger = logging.getLogger('myLogger')
         >>> with TelegramLogger(logger, '~/telegram_chat_ID.txt', '~/telegram_bot_token.txt', level=logging.WARNING):
         ...     logger.error('Oh no an error occurred')
-        '''
+        """
         super().__init__(logger=logger, level=level)
         self.chat_ID = chat_ID
         self.token = token
         self.kwargs = kwargs
 
-    def create_new_handler(self):
-        self.handler = new_telegram_handler(self.chat_ID, self.token, level=self.level, **self.kwargs)
+    def create_new_handler(self) -> None:
+        self.handler = new_telegram_handler(
+            self.chat_ID, self.token, level=self.level, **self.kwargs
+        )
+
 
 class FileLogger(CMLogger):
-    def __init__(self, logger: logging.Logger, filename: str, level=logging.INFO, **kwargs):
-        '''
+    def __init__(
+        self,
+        logger: logging.Logger,
+        filename: str,
+        level: int = logging.INFO,
+        **kwargs: typing.Any,
+    ) -> None:
+        """
         Logger to file to be used with the `with` statement. If an unhandled exception is raised in the with block, the traceback will also be logged to the file with level logging.ERROR
 
         Parameters
@@ -447,15 +508,13 @@ class FileLogger(CMLogger):
         >>> logger = logging.getLogger('myLogger')
         >>> with FileLogger(logger, 'log.log', level=logging.WARNING):
         ...     logger.error('Oh no an error occurred')
-        '''
+        """
         super().__init__(logger=logger, level=level)
         self.filename = Path(filename)
         self.kwargs = kwargs
 
-    def create_new_handler(self):
+    def create_new_handler(self) -> None:
         parent_dir = self.filename.parent
         if not parent_dir.exists():
             parent_dir.mkdir(parents=True, exist_ok=True)
         self.handler = logging.FileHandler(filename=self.filename, **self.kwargs)
-
-

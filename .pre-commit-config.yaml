@@ -1,0 +1,81 @@
+---
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: no-commit-to-branch
+        language_version: python3.13
+        args:
+          - --branch
+          - main
+
+  # Python code quality
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version.
+    rev: v0.14.14
+    hooks:
+      # Run the linter.
+      - id: ruff-check
+        types_or: [python, pyi]
+        args: [--fix]
+      # Run the formatter.
+      - id: ruff-format
+        types_or: [python, pyi]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.16.1
+    hooks:
+      - id: mypy
+        verbose: true
+        args:
+          - --show-error-codes
+          - --ignore-missing-imports
+          - --explicit-package-bases
+          - --check-untyped-defs
+          - --disallow-untyped-defs
+        additional_dependencies:
+          - types-requests
+
+  # Spell-checking
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        args:
+          - --ignore-words-list=AKS,AKS's,AKSs,HAWARE,MITIGA,astroid,sav,vas
+          - --exclude-file=poetry.lock
+        exclude: ^notebooks/
+
+  # # YAML validation
+  # - repo: https://github.com/adrienverge/yamllint
+  #   rev: v1.37.1
+  #   hooks:
+  #     - id: yamllint
+  #       args:
+  #         - "--config-data"
+  #         - >-
+  #           {
+  #             extends: default,
+  #             rules:
+  #               {
+  #                 line-length: { max: 120 }
+  #               },
+  #             exclude:
+  #               '.*templates/.*\\.yaml|.*charts/.*\\.yaml'
+  #           }
+
+  # Project management
+  - repo: local
+    hooks:
+      - id: check-poetry-updates
+        name: Check Poetry Updates
+        entry: >
+          bash -c 'poetry check --lock ||
+          (echo "Pyproject.toml or poetry.lock has changed.
+          Please run poetry install to update dependencies."
+          && exit 1)'
+        language: system
+        types: [python]
+        stages: [pre-commit]

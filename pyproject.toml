@@ -27,5 +27,41 @@ build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
 dev = [
-    "jupyter (>=1.1.1,<2.0.0)"
+    "jupyter (>=1.1.1,<2.0.0)",
+    "pre-commit (>=4.5.1,<5.0.0)",
+    "ruff (>=0.14.14,<0.15.0)",
+    "isort (>=7.0.0,<8.0.0)",
+    "pytest (>=9.0.2,<10.0.0)"
+]
+
+[tool.black]
+line-length = 88
+# do not auto format
+exclude = """
+/(
+      notebooks,
+    | .git,
+    | __pycache__,
+)/
+"""
+
+[tool.isort]
+profile = "black"
+
+[tool.ruff]
+exclude = ["notebooks/*"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle
+    "F",   # Pyflakes
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "I",   # isort
+]
+ignore = [
+    # omit line-too-long in the linter, there's some edge cases that are ambiguous
+    # the formatter will take care of it
+    "E501" # line-too-long
 ]
